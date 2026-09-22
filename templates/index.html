@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Video Downloader</title>
+<title>BeeTik — Save TikTok Videos, No Watermark</title>
 <style>
   :root {
     --bg: #0f1115;
@@ -14,6 +14,7 @@
     --muted: #9a9ba5;
     --error: #ff6b6b;
     --success: #51cf66;
+    --border: #2a2d38;
   }
   * { box-sizing: border-box; }
   body {
@@ -21,22 +22,32 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     background: var(--bg);
     color: var(--text);
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    line-height: 1.5;
+  }
+  .wrap {
+    max-width: 640px;
+    margin: 0 auto;
     padding: 20px;
+  }
+  .ad-slot {
+    background: #12141a;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+    margin: 20px 0;
   }
   .card {
     background: var(--card);
     border-radius: 16px;
-    padding: 40px 32px;
-    max-width: 480px;
-    width: 100%;
+    padding: 36px 28px;
     box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    margin-top: 30px;
   }
   h1 {
-    font-size: 24px;
+    font-size: 26px;
     margin: 0 0 8px;
   }
   p.sub {
@@ -48,7 +59,7 @@
     width: 100%;
     padding: 14px 16px;
     border-radius: 10px;
-    border: 1px solid #2a2d38;
+    border: 1px solid var(--border);
     background: #0f1115;
     color: var(--text);
     font-size: 15px;
@@ -94,39 +105,288 @@
     margin-top: 24px;
     font-size: 12px;
     color: var(--muted);
-    line-height: 1.5;
+  }
+  section.info {
+    margin-top: 48px;
+  }
+  section.info h2 {
+    font-size: 19px;
+    margin-bottom: 16px;
+  }
+  .hero-tag {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.3px;
+  }
+  .hero-underline {
+    width: 44px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin: 10px 0 18px;
+  }
+
+  /* Post-download "install as app" banner */
+  #installBanner {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: var(--card);
+    border-top: 1px solid var(--border);
+    padding: 20px;
+    transform: translateY(110%);
+    transition: transform 0.3s ease;
+    z-index: 50;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+  }
+  #installBanner.show { transform: translateY(0); }
+  #installBanner .ib-wrap { max-width: 640px; margin: 0 auto; }
+  #installBanner h3 { margin: 0 0 6px; font-size: 15px; }
+  #installBanner p { margin: 0 0 14px; font-size: 13px; color: var(--muted); }
+  #installBanner .ib-steps { font-size: 13px; color: var(--muted); margin-bottom: 16px; padding-left: 18px; }
+  #installBanner .ib-steps li { margin-bottom: 4px; }
+  .ib-email-row { display: flex; gap: 8px; }
+  .ib-email-row input {
+    flex: 1;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0f1115;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+  .ib-email-row button {
+    width: auto;
+    margin-top: 0;
+    padding: 12px 18px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+  .ib-close {
+    position: absolute;
+    top: 14px; right: 16px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 18px;
+    cursor: pointer;
+    width: auto;
+    margin: 0;
+    padding: 0;
+  }
+  #ibMsg { font-size: 12px; margin-top: 8px; min-height: 16px; }
+  #ibMsg.success { color: var(--success); }
+  #ibMsg.error { color: var(--error); }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .step {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .step-num {
+    background: var(--accent);
+    color: white;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .step-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+  .step-text span { color: var(--muted); font-size: 13px; }
+
+  .faq-item {
+    border-bottom: 1px solid var(--border);
+  }
+  .faq-q {
+    width: 100%;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .faq-q .arrow { transition: transform 0.2s; color: var(--muted); }
+  .faq-q.open .arrow { transform: rotate(180deg); }
+  .faq-a {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s ease;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .faq-a-inner { padding-bottom: 16px; }
+
+  footer {
+    margin-top: 48px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    padding-bottom: 30px;
   }
 </style>
 </head>
 <body>
+<div class="wrap">
+
+  <!-- Ad placeholder: banner, top of page. Non-blocking, never covers content. -->
+  <div class="ad-slot">Ad space</div>
+
   <div class="card">
-    <h1>Video Downloader</h1>
-    <p class="sub">Paste a video link below to fetch a downloadable file.</p>
-    <input type="text" id="url" placeholder="https://example.com/video/..." autocomplete="off">
+    <div class="hero-tag">Download TikTok Videos Without Watermark — FREE</div>
+    <div class="hero-underline"></div>
+    <h1>BeeTik</h1>
+    <p class="sub">Paste a TikTok link below — get a clean download, no watermark, no login.</p>
+    <input type="text" id="url" placeholder="https://www.tiktok.com/@user/video/..." autocomplete="off">
     <button id="go">Download</button>
     <div id="status"></div>
-    <div class="note">Only download content you have the right to download. Please respect the source site's terms of service and copyright law.</div>
   </div>
+
+  <!-- Ad placeholder: banner, between the tool and the info sections. -->
+  <div class="ad-slot">Ad space</div>
+
+  <section class="info">
+    <h2>How It Works</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text"><strong>Copy the link</strong><span>Open TikTok, find the video, tap Share → Copy Link.</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text"><strong>Paste it above</strong><span>Drop the link into the box and hit Download.</span></div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text"><strong>Save it</strong><span>Your video downloads straight to your device — no watermark, no login needed.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="info">
+    <h2>FAQ</h2>
+    <div class="faq">
+      <div class="faq-item">
+        <button class="faq-q">Does this remove the TikTok watermark?<span class="arrow">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes — downloads come through without the TikTok logo overlay in most cases.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Do I need to install anything?<span class="arrow">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No app or extension needed. It works right in your browser, on phone or desktop.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Is it free?<span class="arrow">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Yes, free to use.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">What links are supported?<span class="arrow">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">Full links (tiktok.com/@user/video/123...) and short links (vm.tiktok.com/xxxx) both work.</div></div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">Do you store my downloaded videos?<span class="arrow">▾</span></button>
+        <div class="faq-a"><div class="faq-a-inner">No — files are temporarily processed to deliver your download, then automatically deleted from the server shortly after.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Ad placeholder: banner, bottom of page. -->
+  <div class="ad-slot">Ad space</div>
+
+  <footer>
+    <strong>BeeTik</strong> · Not affiliated with TikTok or ByteDance Ltd. · Please only download content you have the right to use.
+  </footer>
+
+</div>
+
+<!-- Shown after a successful download. Frames the "add to home screen" tip
+     and the email opt-in together, so the ask feels earned rather than a
+     cold popup. -->
+<div id="installBanner">
+  <div class="ib-wrap">
+    <button class="ib-close" id="ibClose">✕</button>
+    <h3>📲 Get one-tap access next time</h3>
+    <p>Save this page to your Home Screen and it opens just like an app — no browser tabs, no re-typing the URL.</p>
+    <ul class="ib-steps" id="ibSteps">
+      <li><strong>iPhone (Safari):</strong> tap the Share icon → "Add to Home Screen"</li>
+      <li><strong>Android (Chrome):</strong> tap the ⋮ menu → "Add to Home screen" / "Install app"</li>
+    </ul>
+    <p style="margin-bottom:8px;">Want quicker downloads and useful tips sent occasionally? Drop your email:</p>
+    <div class="ib-email-row">
+      <input type="email" id="ibEmail" placeholder="you@example.com" autocomplete="email">
+      <button id="ibSubmit">Notify me</button>
+    </div>
+    <div id="ibMsg"></div>
+  </div>
+</div>
 
 <script>
 const urlInput = document.getElementById('url');
 const goBtn = document.getElementById('go');
 const statusEl = document.getElementById('status');
 
-async function poll(jobId) {
+// Rotating messages shown during the (slightly extended) loading phase.
+const loadingMessages = [
+  'Fetching video...',
+  'Preparing HD download...',
+  'Almost there...'
+];
+
+// Minimum time the loading state stays visible, even if the file is
+// actually ready sooner. Gives the page a more substantial feel and
+// lets ad slots above actually get seen. Adjust or remove as needed.
+const MIN_LOADING_MS = 3000;
+
+let messageInterval;
+
+function startMessageRotation() {
+  let i = 0;
+  statusEl.className = '';
+  statusEl.innerHTML = `<span class="spinner"></span>${loadingMessages[0]}`;
+  messageInterval = setInterval(() => {
+    i = (i + 1) % loadingMessages.length;
+    statusEl.innerHTML = `<span class="spinner"></span>${loadingMessages[i]}`;
+  }, 1200);
+}
+
+function stopMessageRotation() {
+  clearInterval(messageInterval);
+}
+
+async function poll(jobId, startedAt) {
   const res = await fetch(`/api/status/${jobId}`);
   const data = await res.json();
 
   if (data.status === 'downloading') {
-    statusEl.className = '';
-    statusEl.innerHTML = '<span class="spinner"></span>Fetching video...';
-    setTimeout(() => poll(jobId), 1500);
+    setTimeout(() => poll(jobId, startedAt), 1200);
   } else if (data.status === 'done') {
-    statusEl.className = 'success';
-    statusEl.innerHTML = 'Ready! Downloading now...';
-    window.location.href = `/api/file/${jobId}`;
-    goBtn.disabled = false;
+    const elapsed = Date.now() - startedAt;
+    const remaining = Math.max(0, MIN_LOADING_MS - elapsed);
+    setTimeout(() => {
+      stopMessageRotation();
+      statusEl.className = 'success';
+      statusEl.textContent = 'Ready! Downloading now...';
+      window.location.href = `/api/file/${jobId}`;
+      goBtn.disabled = false;
+      maybeShowInstallBanner();
+    }, remaining);
   } else if (data.status === 'error') {
+    stopMessageRotation();
     statusEl.className = 'error';
     statusEl.textContent = 'Error: ' + (data.error || 'Something went wrong.');
     goBtn.disabled = false;
@@ -142,8 +402,8 @@ goBtn.addEventListener('click', async () => {
   }
 
   goBtn.disabled = true;
-  statusEl.className = '';
-  statusEl.innerHTML = '<span class="spinner"></span>Starting...';
+  const startedAt = Date.now();
+  startMessageRotation();
 
   try {
     const res = await fetch('/api/start', {
@@ -154,14 +414,16 @@ goBtn.addEventListener('click', async () => {
     const data = await res.json();
 
     if (!res.ok) {
+      stopMessageRotation();
       statusEl.className = 'error';
       statusEl.textContent = data.error || 'Something went wrong.';
       goBtn.disabled = false;
       return;
     }
 
-    poll(data.job_id);
+    poll(data.job_id, startedAt);
   } catch (e) {
+    stopMessageRotation();
     statusEl.className = 'error';
     statusEl.textContent = 'Network error. Please try again.';
     goBtn.disabled = false;
@@ -171,6 +433,73 @@ goBtn.addEventListener('click', async () => {
 urlInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') goBtn.click();
 });
+
+// Install banner: show once per browser, a couple seconds after a
+// successful download so it doesn't collide with the file save prompt.
+const installBanner = document.getElementById('installBanner');
+const ibClose = document.getElementById('ibClose');
+const ibEmail = document.getElementById('ibEmail');
+const ibSubmit = document.getElementById('ibSubmit');
+const ibMsg = document.getElementById('ibMsg');
+
+function maybeShowInstallBanner() {
+  if (localStorage.getItem('ib_dismissed') === '1') return;
+  setTimeout(() => installBanner.classList.add('show'), 1500);
+}
+
+ibClose.addEventListener('click', () => {
+  installBanner.classList.remove('show');
+  localStorage.setItem('ib_dismissed', '1');
+});
+
+ibSubmit.addEventListener('click', async () => {
+  const email = ibEmail.value.trim();
+  if (!email) {
+    ibMsg.className = 'error';
+    ibMsg.textContent = 'Enter an email first.';
+    return;
+  }
+  ibSubmit.disabled = true;
+  try {
+    const res = await fetch('/api/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      ibMsg.className = 'error';
+      ibMsg.textContent = data.error || 'Something went wrong.';
+      ibSubmit.disabled = false;
+      return;
+    }
+    ibMsg.className = 'success';
+    ibMsg.textContent = "You're on the list!";
+    localStorage.setItem('ib_dismissed', '1');
+    setTimeout(() => installBanner.classList.remove('show'), 1500);
+  } catch (e) {
+    ibMsg.className = 'error';
+    ibMsg.textContent = 'Network error, try again.';
+    ibSubmit.disabled = false;
+  }
+});
+
+// FAQ accordion
+document.querySelectorAll('.faq-q').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const answer = btn.nextElementSibling;
+    const isOpen = btn.classList.contains('open');
+    document.querySelectorAll('.faq-q').forEach(b => {
+      b.classList.remove('open');
+      b.nextElementSibling.style.maxHeight = null;
+    });
+    if (!isOpen) {
+      btn.classList.add('open');
+      answer.style.maxHeight = answer.scrollHeight + 'px';
+    }
+  });
+});
 </script>
 </body>
 </html>
+
