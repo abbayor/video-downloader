@@ -1,3 +1,6 @@
+cat /home/claude/video-downloader/app.py
+Output
+
 import os
 import re
 import uuid
@@ -41,9 +44,11 @@ def _safe_filename(name: str) -> str:
 
 
 def _download_job(job_id: str, url: str):
-    JOBS[job_id] = {"status": "downloading", "filename": None, "error": None}
+    JOBS[job_id] = {"status": "downloading", "filename": None, "display_name": None, "error": None}
 
-    outtmpl = os.path.join(DOWNLOAD_DIR, f"{job_id}_%(title)s.%(ext)s")
+    # Use only the job_id in the actual file path on disk — avoids "filename
+    # too long" errors from video captions/titles with lots of text or emoji.
+    outtmpl = os.path.join(DOWNLOAD_DIR, f"{job_id}.%(ext)s")
 
     ydl_opts = {
         "outtmpl": outtmpl,
@@ -58,9 +63,21 @@ def _download_job(job_id: str, url: str):
             info = ydl.extract_info(url, download=True)
             filepath = ydl.prepare_filename(info)
             filename = os.path.basename(filepath)
-            JOBS[job_id] = {"status": "done", "filename": filename, "error": None}
+            ext = filename.rsplit(".", 1)[-1] if "." in filename else "mp4"
+
+            # A friendlier name for the user's downloaded file, safely
+            # shortened so it can't cause the same problem.
+            raw_title = info.get("title") or "video"
+            display_name = _safe_filename(raw_title)[:60] + f".{ext}"
+
+            JOBS[job_id] = {
+                "status": "done",
+                "filename": filename,
+                "display_name": display_name,
+                "error": None,
+            }
     except Exception as e:
-        JOBS[job_id] = {"status": "error", "filename": None, "error": str(e)}
+        JOBS[job_id] = {"status": "error", "filename": None, "display_name": None, "error": str(e)}
 
 
 @app.route("/")
@@ -91,12 +108,35 @@ def status(job_id):
     return jsonify(job)
 
 
+@app.route("/api/subscribe", methods=["POST"])
+def subscribe():
+    data = request.get_json(force=True)
+    email = (data or {}).get("email", "").strip().lower()
+
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        return jsonify({"error": "Please enter a valid email."}), 400
+
+    subscribers_path = os.path.join(os.path.dirname(__file__), "subscribers.txt")
+    try:
+        with open(subscribers_path, "a") as f:
+            f.write(email + "\n")
+    except OSError:
+        return jsonify({"error": "Could not save right now, try again."}), 500
+
+    return jsonify({"ok": True})
+
+
 @app.route("/api/file/<job_id>")
 def get_file(job_id):
     job = JOBS.get(job_id)
     if not job or job["status"] != "done":
         return jsonify({"error": "File not ready"}), 404
-    return send_from_directory(DOWNLOAD_DIR, job["filename"], as_attachment=True)
+    return send_from_directory(
+        DOWNLOAD_DIR,
+        job["filename"],
+        as_attachment=True,
+        download_name=job.get("display_name") or job["filename"],
+    )
 
 
 if __name__ == "__main__":
