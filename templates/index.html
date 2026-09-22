@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Video Downloader</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #171a21;
+    --accent: #6c5ce7;
+    --accent-hover: #7d6bf0;
+    --text: #f0f0f5;
+    --muted: #9a9ba5;
+    --error: #ff6b6b;
+    --success: #51cf66;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 40px 32px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  h1 {
+    font-size: 24px;
+    margin: 0 0 8px;
+  }
+  p.sub {
+    color: var(--muted);
+    margin: 0 0 28px;
+    font-size: 14px;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1px solid #2a2d38;
+    background: #0f1115;
+    color: var(--text);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+  button {
+    width: 100%;
+    margin-top: 14px;
+    padding: 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover:not(:disabled) { background: var(--accent-hover); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status {
+    margin-top: 20px;
+    font-size: 14px;
+    min-height: 20px;
+  }
+  #status.error { color: var(--error); }
+  #status.success { color: var(--success); }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #333;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .note {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Video Downloader</h1>
+    <p class="sub">Paste a video link below to fetch a downloadable file.</p>
+    <input type="text" id="url" placeholder="https://example.com/video/..." autocomplete="off">
+    <button id="go">Download</button>
+    <div id="status"></div>
+    <div class="note">Only download content you have the right to download. Please respect the source site's terms of service and copyright law.</div>
+  </div>
+
+<script>
+const urlInput = document.getElementById('url');
+const goBtn = document.getElementById('go');
+const statusEl = document.getElementById('status');
+
+async function poll(jobId) {
+  const res = await fetch(`/api/status/${jobId}`);
+  const data = await res.json();
+
+  if (data.status === 'downloading') {
+    statusEl.className = '';
+    statusEl.innerHTML = '<span class="spinner"></span>Fetching video...';
+    setTimeout(() => poll(jobId), 1500);
+  } else if (data.status === 'done') {
+    statusEl.className = 'success';
+    statusEl.innerHTML = 'Ready! Downloading now...';
+    window.location.href = `/api/file/${jobId}`;
+    goBtn.disabled = false;
+  } else if (data.status === 'error') {
+    statusEl.className = 'error';
+    statusEl.textContent = 'Error: ' + (data.error || 'Something went wrong.');
+    goBtn.disabled = false;
+  }
+}
+
+goBtn.addEventListener('click', async () => {
+  const url = urlInput.value.trim();
+  if (!url) {
+    statusEl.className = 'error';
+    statusEl.textContent = 'Please paste a video URL first.';
+    return;
+  }
+
+  goBtn.disabled = true;
+  statusEl.className = '';
+  statusEl.innerHTML = '<span class="spinner"></span>Starting...';
+
+  try {
+    const res = await fetch('/api/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.className = 'error';
+      statusEl.textContent = data.error || 'Something went wrong.';
+      goBtn.disabled = false;
+      return;
+    }
+
+    poll(data.job_id);
+  } catch (e) {
+    statusEl.className = 'error';
+    statusEl.textContent = 'Network error. Please try again.';
+    goBtn.disabled = false;
+  }
+});
+
+urlInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') goBtn.click();
+});
+</script>
+</body>
+</html>
