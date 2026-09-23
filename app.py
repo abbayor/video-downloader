@@ -6,17 +6,31 @@ import time
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 import yt_dlp
+import imageio_ffmpeg
 
 app = Flask(__name__)
 
 DOWNLOAD_DIR = os.path.join(os.path.dirname(__file__), "downloads")
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
+# Portable ffmpeg binary bundled via imageio-ffmpeg — needed for MP3
+# extraction, since Render's default Python environment has no system ffmpeg.
+FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
+
 # In-memory job store: {job_id: {"status": ..., "filename": ..., "error": ...}}
 JOBS = {}
 
 # How long a finished file is kept before we auto-delete it (seconds)
 FILE_LIFETIME = 60 * 30  # 30 minutes
+
+# Format string per requested quality. "hd" pulls the best available
+# video+audio; "720p" caps resolution; "mp3" pulls audio only and is
+# converted to mp3 via ffmpeg below.
+FORMAT_MAP = {
+    "hd": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+    "720p": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]",
+    "mp3": "bestaudio/best",
+}
 
 
 def _cleanup_old_files():
@@ -40,8 +54,19 @@ def _safe_filename(name: str) -> str:
     return name[:150]
 
 
-def _download_job(job_id: str, url: str):
+def _find_output_file(job_id: str) -> str | None:
+    """Find whatever file yt-dlp (and ffmpeg postprocessing) produced for
+    this job, regardless of final extension — mp3 conversion changes it."""
+    for name in os.listdir(DOWNLOAD_DIR):
+        if name.startswith(job_id + ".") and not name.endswith(".part"):
+            return name
+    return None
+
+
+def _download_job(job_id: str, url: str, quality: str):
     JOBS[job_id] = {"status": "downloading", "filename": None, "display_name": None, "error": None}
+
+    quality = quality if quality in FORMAT_MAP else "720p"
 
     # Use only the job_id in the actual file path on disk — avoids "filename
     # too long" errors from video captions/titles with lots of text or emoji.
@@ -49,21 +74,29 @@ def _download_job(job_id: str, url: str):
 
     ydl_opts = {
         "outtmpl": outtmpl,
-        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "format": FORMAT_MAP[quality],
         "noplaylist": True,
         "quiet": True,
         "no_warnings": True,
+        "ffmpeg_location": FFMPEG_PATH,
     }
+
+    if quality == "mp3":
+        ydl_opts["postprocessors"] = [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }]
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
-            filepath = ydl.prepare_filename(info)
-            filename = os.path.basename(filepath)
-            ext = filename.rsplit(".", 1)[-1] if "." in filename else "mp4"
 
-            # A friendlier name for the user's downloaded file, safely
-            # shortened so it can't cause the same problem.
+            filename = _find_output_file(job_id)
+            if not filename:
+                raise RuntimeError("Download finished but the output file wasn't found.")
+
+            ext = filename.rsplit(".", 1)[-1]
             raw_title = info.get("title") or "video"
             display_name = _safe_filename(raw_title)[:60] + f".{ext}"
 
@@ -86,12 +119,16 @@ def index():
 def start():
     data = request.get_json(force=True)
     url = (data or {}).get("url", "").strip()
+    quality = (data or {}).get("quality", "720p").strip().lower()
 
     if not url or not url.startswith(("http://", "https://")):
         return jsonify({"error": "Please provide a valid video URL."}), 400
 
+    if quality not in FORMAT_MAP:
+        quality = "720p"
+
     job_id = uuid.uuid4().hex[:12]
-    thread = threading.Thread(target=_download_job, args=(job_id, url), daemon=True)
+    thread = threading.Thread(target=_download_job, args=(job_id, url, quality), daemon=True)
     thread.start()
 
     return jsonify({"job_id": job_id})
