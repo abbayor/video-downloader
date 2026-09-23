@@ -179,6 +179,74 @@
   #ibMsg.success { color: var(--success); }
   #ibMsg.error { color: var(--error); }
 
+  .quality-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .quality-pill {
+    flex: 1;
+    position: relative;
+    padding: 10px 6px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0f1115;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .quality-pill.active {
+    border-color: var(--accent);
+    color: var(--text);
+    background: rgba(108,92,231,0.12);
+  }
+  .quality-pill .tag {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-top: 2px;
+  }
+
+  /* Ad-gate modal shown before an HD download */
+  .modal-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal-box {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+  }
+  .modal-box h3 { margin: 0 0 8px; font-size: 16px; }
+  .modal-box p { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+  .modal-ad-slot {
+    background: #0f1115;
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 30px 14px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .modal-box button {
+    margin-top: 0;
+  }
+  .modal-box button:disabled { opacity: 0.4; }
+
   .steps {
     display: flex;
     flex-direction: column;
@@ -254,6 +322,11 @@
     <h1>BeeTik</h1>
     <p class="sub">Paste a TikTok link below — get a clean download, no watermark, no login.</p>
     <input type="text" id="url" placeholder="https://www.tiktok.com/@user/video/..." autocomplete="off">
+    <div class="quality-row">
+      <div class="quality-pill active" data-quality="720p">720p</div>
+      <div class="quality-pill" data-quality="hd">HD<span class="tag">Editors' pick 🎬</span></div>
+      <div class="quality-pill" data-quality="mp3">MP3</div>
+    </div>
     <button id="go">Download</button>
     <div id="status"></div>
   </div>
@@ -314,6 +387,18 @@
 
 </div>
 
+<!-- Shown before an HD download — a short mock "watch an ad" gate.
+     Swap the modal-ad-slot content for your real ad network's rewarded-ad
+     unit once you're connected to one. -->
+<div class="modal-backdrop" id="adGate">
+  <div class="modal-box">
+    <h3>🎬 Editors' pick: HD</h3>
+    <p>Watch a quick ad to unlock your HD download.</p>
+    <div class="modal-ad-slot" id="adGateSlot">Ad space</div>
+    <button id="adGateContinue" disabled>Continue (<span id="adGateCountdown">5</span>s)</button>
+  </div>
+</div>
+
 <!-- Shown after a successful download. Frames the "add to home screen" tip
      and the email opt-in together, so the ask feels earned rather than a
      cold popup. -->
@@ -339,6 +424,45 @@
 const urlInput = document.getElementById('url');
 const goBtn = document.getElementById('go');
 const statusEl = document.getElementById('status');
+
+// Quality pill selection
+let selectedQuality = '720p';
+document.querySelectorAll('.quality-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.quality-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    selectedQuality = pill.dataset.quality;
+  });
+});
+
+// Ad-gate (shown only before an HD download)
+const adGate = document.getElementById('adGate');
+const adGateContinue = document.getElementById('adGateContinue');
+const adGateCountdown = document.getElementById('adGateCountdown');
+
+function runAdGate() {
+  return new Promise(resolve => {
+    adGate.classList.add('show');
+    adGateContinue.disabled = true;
+    let secs = 5;
+    adGateCountdown.textContent = secs;
+    const timer = setInterval(() => {
+      secs -= 1;
+      adGateCountdown.textContent = secs;
+      if (secs <= 0) {
+        clearInterval(timer);
+        adGateContinue.disabled = false;
+        adGateContinue.textContent = 'Continue';
+      }
+    }, 1000);
+
+    adGateContinue.onclick = () => {
+      adGate.classList.remove('show');
+      adGateContinue.textContent = `Continue (${5}s)`;
+      resolve();
+    };
+  });
+}
 
 // Rotating messages shown during the (slightly extended) loading phase.
 const loadingMessages = [
@@ -401,6 +525,10 @@ goBtn.addEventListener('click', async () => {
     return;
   }
 
+  if (selectedQuality === 'hd') {
+    await runAdGate();
+  }
+
   goBtn.disabled = true;
   const startedAt = Date.now();
   startMessageRotation();
@@ -409,7 +537,7 @@ goBtn.addEventListener('click', async () => {
     const res = await fetch('/api/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url, quality: selectedQuality })
     });
     const data = await res.json();
 
