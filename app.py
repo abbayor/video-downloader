@@ -97,6 +97,13 @@ def _download_job(job_id: str, url: str, quality: str):
 
             filepath = os.path.join(DOWNLOAD_DIR, filename)
 
+            if quality == "mp3" and info.get("acodec") == "none":
+                raise RuntimeError(
+                    "This video has no audio track available to download — TikTok "
+                    "sometimes blocks audio access for videos using licensed music. "
+                    "Try a video with an original/creator sound instead."
+                )
+
             if quality == "mp3":
                 mp3_path = os.path.join(DOWNLOAD_DIR, f"{job_id}.mp3")
                 result = subprocess.run(
@@ -108,7 +115,14 @@ def _download_job(job_id: str, url: str, quality: str):
                     capture_output=True, text=True, timeout=180,
                 )
                 if result.returncode != 0 or not os.path.exists(mp3_path):
-                    raise RuntimeError(f"Audio conversion failed: {result.stderr[-300:]}")
+                    stderr = result.stderr or ""
+                    if "does not contain any stream" in stderr or "Output file" in stderr and "no stream" in stderr.lower():
+                        raise RuntimeError(
+                            "This video has no audio track available to download — TikTok "
+                            "sometimes blocks audio access for videos using licensed music. "
+                            "Try a video with an original/creator sound instead."
+                        )
+                    raise RuntimeError("Audio conversion failed. Please try a different video.")
 
                 # Clean up the pre-conversion raw file, now that mp3 exists.
                 if filepath != mp3_path and os.path.exists(filepath):
