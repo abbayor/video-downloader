@@ -3,6 +3,7 @@ import re
 import uuid
 import threading
 import time
+import subprocess
 from flask import Flask, render_template, request, jsonify, send_from_directory
 
 import yt_dlp
@@ -80,13 +81,11 @@ def _download_job(job_id: str, url: str, quality: str):
         "no_warnings": True,
         "ffmpeg_location": FFMPEG_PATH,
     }
-
-    if quality == "mp3":
-        ydl_opts["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }]
+    # Note: we deliberately do NOT use yt-dlp's built-in FFmpegExtractAudio
+    # postprocessor for mp3 — it shells out to `ffprobe` to check the
+    # existing codec first, and `ffprobe` isn't bundled by imageio-ffmpeg.
+    # Instead we download the raw best-audio file and convert it ourselves
+    # below with a direct ffmpeg call, which only needs `ffmpeg` itself.
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -95,6 +94,27 @@ def _download_job(job_id: str, url: str, quality: str):
             filename = _find_output_file(job_id)
             if not filename:
                 raise RuntimeError("Download finished but the output file wasn't found.")
+
+            filepath = os.path.join(DOWNLOAD_DIR, filename)
+
+            if quality == "mp3":
+                mp3_path = os.path.join(DOWNLOAD_DIR, f"{job_id}.mp3")
+                result = subprocess.run(
+                    [
+                        FFMPEG_PATH, "-y", "-i", filepath,
+                        "-vn", "-acodec", "libmp3lame", "-q:a", "2",
+                        mp3_path,
+                    ],
+                    capture_output=True, text=True, timeout=180,
+                )
+                if result.returncode != 0 or not os.path.exists(mp3_path):
+                    raise RuntimeError(f"Audio conversion failed: {result.stderr[-300:]}")
+
+                # Clean up the pre-conversion raw file, now that mp3 exists.
+                if filepath != mp3_path and os.path.exists(filepath):
+                    os.remove(filepath)
+                filepath = mp3_path
+                filename = os.path.basename(mp3_path)
 
             ext = filename.rsplit(".", 1)[-1]
             raw_title = info.get("title") or "video"
